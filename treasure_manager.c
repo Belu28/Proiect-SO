@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 
 #define USERNAME_LEN 50
 #define CLUE_LEN 150
@@ -31,12 +32,63 @@ void printTreasure(Treasure *t)
   printf("Value: %d\n", t->value);
 }
 
+void addLog(char *operation, char *huntID, int treasureID)
+{
+  char huntPath[PATHS_LEN];
+  char logPath[PATHS_LEN];
+  char symlinkPath[PATHS_LEN];
+  int retval;
+
+  if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
+  {
+    perror("huntPath buffer error(too small)\n");
+    return;
+  }
+  if (snprintf(logPath, sizeof(logPath), "%s/logged_hunt", huntPath) >= sizeof(logPath))
+  {
+    perror("huntPath buffer error(too small)\n");
+    return;
+  }
+
+  retval = open(logPath, O_WRONLY | O_CREAT | O_APPEND, 0777);
+  if (retval < 0)
+  {
+    perror("Failed to open log file");
+    return;
+  }
+
+  if (snprintf(symlinkPath, sizeof(symlinkPath), "logged_hunt-%s", huntID) >= sizeof(symlinkPath))
+  {
+    perror("symlinkPath buffer error(too small)\n");
+    return;
+  }
+
+  if (access(symlinkPath, F_OK) == -1)
+  {
+    if (symlink(logPath, symlinkPath) == -1)
+    {
+      perror("Failed to create symbolic link");
+    }
+  }
+
+  time_t now = time(NULL);
+  struct tm *tm_info = localtime(&now);
+  char timeStr[64];
+  strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+
+  char Entry[512];
+  char trsID[32];
+  snprintf(trsID, sizeof(trsID), "%d", treasureID);
+  snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Hunt: %s | Treasure ID: %d\n", timeStr, operation, huntID, treasureID);
+
+  write(retval, Entry, strlen(Entry));
+  close(retval);
+}
+
 void addTreasure(Treasure *t, char *huntID)
 {
   char huntPath[PATHS_LEN];
   char filePath[PATHS_LEN];
-  char fullPath[PATHS_LEN];
-  char symlinkPath[PATHS_LEN];
   int retval;
 
   if (strlen(huntID) > HUNTID_LEN)
@@ -73,7 +125,7 @@ void addTreasure(Treasure *t, char *huntID)
 
   printf("Enter Treasure ID: ");
   scanf("%d", &t->ID);
-  getchar(); // for flushing
+  getchar();
 
   printf("Enter Username: ");
   fgets(t->username, USERNAME_LEN, stdin);
@@ -101,25 +153,6 @@ void addTreasure(Treasure *t, char *huntID)
 
   close(retval);
   printf("Treasure added successfully.\n");
-
-  if (snprintf(fullPath, sizeof(fullPath), "%s/hunt_notes", huntPath) >= sizeof(fullPath))
-  {
-    perror("fullPath overflow\n");
-    return;
-  }
-
-  if (snprintf(symlinkPath, sizeof(symlinkPath), "hunt_notes-%s", huntID) >= sizeof(symlinkPath))
-  {
-    perror("symlinkPath overflow\n");
-    return;
-  }
-
-  unlink(symlinkPath); // If a previous symlink exists, we unlink it.
-
-  if (symlink(fullPath, symlinkPath) == -1)
-  {
-    perror("Failed to create symbolic link");
-  }
 }
 
 int main(int argc, char *argv[])
@@ -149,7 +182,7 @@ int main(int argc, char *argv[])
     }
 
     addTreasure(treasure, argv[2]);
-    // addLogs(op,argv[2],NULL);
+    addLog("ADD", argv[2], treasure->ID);
   }
   else if (strcmp(argv[1], "--list") == 0)
   {
@@ -160,7 +193,7 @@ int main(int argc, char *argv[])
     }
 
     // listTreasure(argv[2]);
-    //  addLogs(op,argv[2],NULL);
+    //  addLog("LIST",argv[2],NULL);
   }
   else if (strcmp(argv[1], "--view") == 0)
   {
@@ -171,7 +204,7 @@ int main(int argc, char *argv[])
     }
 
     // viewHunt(argv[2], argv[3]);
-    //  addLogs(op, argv[2], argv[3]);
+    //  addLog("VIEW", argv[2], argv[3]);
   }
   else if (strcmp(argv[1], "--remove_treasure") == 0)
   {
@@ -182,7 +215,7 @@ int main(int argc, char *argv[])
     }
 
     // removeTreasure(argv[2], argv[3]);
-    //  addLogs(op, argv[2], argv[3]);
+    //  addLog("REMOVE-TREASURE", argv[2], argv[3]);
   }
   else if (strcmp(argv[1], "--remove_hunt") == 0)
   {
@@ -193,11 +226,13 @@ int main(int argc, char *argv[])
     }
 
     // removeHunt(argv[2]);
+    // addLog("REMOVE-HUNT",argv[2],argv[3]);
   }
   else
   {
     printf("You've entered an unknown command\n");
   }
 
+  printTreasure(treasure);
   return 0;
 }
