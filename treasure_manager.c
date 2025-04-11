@@ -78,10 +78,25 @@ void addLog(char *operation, char *huntID, int treasureID)
 
   char Entry[512];
   char trsID[32];
-  snprintf(trsID, sizeof(trsID), "%d", treasureID);
-  snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Hunt: %s | Treasure ID: %d\n", timeStr, operation, huntID, treasureID);
 
-  write(retval, Entry, strlen(Entry));
+  if (snprintf(trsID, sizeof(trsID), "%d", treasureID) >= sizeof(trsID))
+  {
+    perror("treasureID buffer error(too small)\n");
+    return;
+  }
+  if (snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Hunt: %s | Treasure ID: %d\n", timeStr, operation, huntID, treasureID) >= sizeof(Entry))
+  {
+    perror("Entry Log buffer error(too small)\n");
+    return;
+  }
+
+  if (write(retval, Entry, sizeof(Entry)) != sizeof(Entry))
+  {
+    perror("Failed to write Entry Log to file");
+    close(retval);
+    return;
+  }
+
   close(retval);
 }
 
