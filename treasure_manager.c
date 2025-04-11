@@ -90,11 +90,10 @@ void addLog(char *operation, char *huntID, int treasureID)
     return;
   }
 
-  if (write(retval, Entry, sizeof(Entry)) != sizeof(Entry))
+  ssize_t len = strlen(Entry);
+  if (write(retval, Entry, len) != len)
   {
     perror("Failed to write Entry Log to file");
-    close(retval);
-    return;
   }
 
   close(retval);
