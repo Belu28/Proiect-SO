@@ -90,13 +90,17 @@ void addLog(char *operation, char *huntID, int treasureID)
     return;
   }
 
-  ssize_t len = strlen(Entry);
+  int len = strlen(Entry);
   if (write(retval, Entry, len) != len)
   {
     perror("Failed to write Entry Log to file");
   }
 
-  close(retval);
+  if (close(retval) == -1)
+  {
+    perror("Failed to close file");
+    return;
+  }
 }
 
 void addTreasure(Treasure *t, char *huntID)
@@ -161,12 +165,81 @@ void addTreasure(Treasure *t, char *huntID)
   if (write(retval, t, sizeof(Treasure)) != sizeof(Treasure))
   {
     perror("Failed to write treasure to file");
-    close(retval);
+    if (close(retval) == -1)
+    {
+      perror("Failed to close file");
+      return;
+    }
     return;
   }
 
-  close(retval);
+  if (close(retval) == -1)
+  {
+    perror("Failed to close file");
+    return;
+  }
   printf("Treasure added successfully.\n");
+}
+
+void listTreasures(char *huntID)
+{
+  char huntPath[PATHS_LEN];
+  char filePath[PATHS_LEN];
+  struct stat st;
+  int retval;
+
+  if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
+  {
+    perror("huntPath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath))
+  {
+    perror("filePath buffer error(too small)");
+    return;
+  }
+
+  if (stat(filePath, &st) == -1)
+  {
+    perror("Failed to get file info");
+    return;
+  }
+
+  printf("HuntID: %s \n", huntID);
+  printf("Total file size: %ld bytes\n", st.st_size);
+
+  char timeStr[64];
+  struct tm *tm_info = localtime(&st.st_mtime);
+  strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+  printf("Last modified: %s\n\n", timeStr);
+
+  retval = open(filePath, O_RDONLY);
+  if (retval < 0)
+  {
+    perror("Failed to open treasure file");
+    return;
+  }
+
+  Treasure t;
+  int k = 0;
+  while (read(retval, &t, sizeof(Treasure)) == sizeof(Treasure))
+  {
+    printf("Treasure %d:\n", ++k);
+    printTreasure(&t);
+    printf("\n\n\n");
+  }
+
+  if (k == 0)
+  {
+    printf("No treasures found.\n");
+  }
+
+  if (close(retval) == -1)
+  {
+    perror("Failed to close file");
+    return;
+  }
 }
 
 int main(int argc, char *argv[])
@@ -206,8 +279,8 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-    // listTreasure(argv[2]);
-    //  addLog("LIST",argv[2],NULL);
+    listTreasures(argv[2]);
+    addLog("LIST", argv[2], 0);
   }
   else if (strcmp(argv[1], "--view") == 0)
   {
@@ -246,7 +319,5 @@ int main(int argc, char *argv[])
   {
     printf("You've entered an unknown command\n");
   }
-
-  printTreasure(treasure);
   return 0;
 }
