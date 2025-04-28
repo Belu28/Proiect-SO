@@ -77,17 +77,22 @@ void addLog(char *operation, char *huntID, int treasureID)
   strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
 
   char Entry[512];
-  char trsID[32];
 
-  if (snprintf(trsID, sizeof(trsID), "%d", treasureID) >= sizeof(trsID))
+  if (strcmp(operation, "ADD") == 0 || strcmp(operation, "VIEW") == 0)
   {
-    perror("treasureID buffer error(too small)\n");
-    return;
+    if (snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Treasure ID: %d\n", timeStr, operation, treasureID) >= sizeof(Entry))
+    {
+      perror("Entry buffer error(too small)\n");
+      return;
+    }
   }
-  if (snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Hunt: %s | Treasure ID: %d\n", timeStr, operation, huntID, treasureID) >= sizeof(Entry))
+  else
   {
-    perror("Entry Log buffer error(too small)\n");
-    return;
+    if (snprintf(Entry, sizeof(Entry), "[%s] Operation: %s \n", timeStr, operation) >= sizeof(Entry))
+    {
+      perror("Entry buffer error(too small)\n");
+      return;
+    }
   }
 
   int len = strlen(Entry);
@@ -127,7 +132,7 @@ void addTreasure(Treasure *t, char *huntID)
     return;
   }
 
-  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath)) // .dat? or .txt .csv etc
+  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath))
   {
     perror("filePath buffer error(too small)\n");
     return;
@@ -242,6 +247,118 @@ void listTreasures(char *huntID)
   }
 }
 
+void viewTreasure(char *huntID, int treasureID)
+{
+  char huntPath[PATHS_LEN];
+  char filePath[PATHS_LEN];
+  struct stat st;
+  int fd;
+
+  if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
+  {
+    perror("huntPath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath))
+  {
+    perror("filePath buffer error(too small)");
+    return;
+  }
+
+  if (stat(filePath, &st) == -1)
+  {
+    perror("Failed to get file info");
+    return;
+  }
+
+  fd = open(filePath, O_RDONLY);
+  if (fd < 0)
+  {
+    perror("Failed to open treasure file");
+    return;
+  }
+
+  Treasure t;
+  int k = 0;
+
+  while (read(fd, &t, sizeof(Treasure)) == sizeof(Treasure))
+  {
+    if (t.ID == treasureID)
+    {
+      printf("\nTreasure found:\n");
+      printTreasure(&t);
+      k = 1;
+      break;
+    }
+  }
+
+  if (k == 0)
+  {
+    printf("Could not find a treasure with the ID %d in hunt '%s'.\n", treasureID, huntID);
+  }
+
+  if (close(fd) == -1)
+  {
+    perror("Failed to close file");
+  }
+}
+
+void removeHunt(char *huntID)
+{
+  char huntPath[PATHS_LEN];
+  char filePath[PATHS_LEN];
+  char logPath[PATHS_LEN];
+  char symlinkPath[PATHS_LEN];
+
+  if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
+  {
+    perror("huntPath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath))
+  {
+    perror("filePath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(logPath, sizeof(logPath), "%s/logged_hunt", huntPath) >= sizeof(logPath))
+  {
+    perror("logFilePath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(symlinkPath, sizeof(symlinkPath), "logged_hunt-%s", huntID) >= sizeof(symlinkPath))
+  {
+    perror("symlinkPath buffer error(too small)");
+    return;
+  }
+
+  if (unlink(filePath) == -1)
+  {
+    perror("Failed to remove treasure.dat");
+  }
+
+  if (unlink(logPath) == -1)
+  {
+    perror("Failed to remove logged_hunt");
+  }
+
+  if (rmdir(huntPath) == -1)
+  {
+    perror("Failed to remove hunt directory");
+    return;
+  }
+
+  if (unlink(symlinkPath) == -1)
+  {
+    perror("Failed to remove the symbolic link");
+  }
+
+  printf("Hunt '%s' and its treasures have been removed.\n", huntID);
+}
+
 int main(int argc, char *argv[])
 {
   if (argc < 2)
@@ -290,8 +407,9 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-    // viewHunt(argv[2], argv[3]);
-    //  addLog("VIEW", argv[2], argv[3]);
+    int treasureID = atoi(argv[3]);
+    viewTreasure(argv[2], treasureID);
+    addLog("VIEW", argv[2], treasureID);
   }
   else if (strcmp(argv[1], "--remove_treasure") == 0)
   {
@@ -312,8 +430,8 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-    // removeHunt(argv[2]);
-    // addLog("REMOVE-HUNT",argv[2],argv[3]);
+    removeHunt(argv[2]);
+    // addLog("REMOVE-HUNT", argv[2], 0);
   }
   else
   {
