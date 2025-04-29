@@ -78,7 +78,7 @@ void addLog(char *operation, char *huntID, int treasureID)
 
   char Entry[512];
 
-  if (strcmp(operation, "ADD") == 0 || strcmp(operation, "VIEW") == 0)
+  if (strcmp(operation, "ADD") == 0 || strcmp(operation, "VIEW") == 0 || strcmp(operation, "REMOVE-TREASURE") == 0)
   {
     if (snprintf(Entry, sizeof(Entry), "[%s] Operation: %s | Treasure ID: %d\n", timeStr, operation, treasureID) >= sizeof(Entry))
     {
@@ -252,7 +252,7 @@ void viewTreasure(char *huntID, int treasureID)
   char huntPath[PATHS_LEN];
   char filePath[PATHS_LEN];
   struct stat st;
-  int fd;
+  int retval;
 
   if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
   {
@@ -272,8 +272,8 @@ void viewTreasure(char *huntID, int treasureID)
     return;
   }
 
-  fd = open(filePath, O_RDONLY);
-  if (fd < 0)
+  retval = open(filePath, O_RDONLY);
+  if (retval < 0)
   {
     perror("Failed to open treasure file");
     return;
@@ -282,7 +282,7 @@ void viewTreasure(char *huntID, int treasureID)
   Treasure t;
   int k = 0;
 
-  while (read(fd, &t, sizeof(Treasure)) == sizeof(Treasure))
+  while (read(retval, &t, sizeof(Treasure)) == sizeof(Treasure))
   {
     if (t.ID == treasureID)
     {
@@ -298,10 +298,113 @@ void viewTreasure(char *huntID, int treasureID)
     printf("Could not find a treasure with the ID %d in hunt '%s'.\n", treasureID, huntID);
   }
 
-  if (close(fd) == -1)
+  if (close(retval) == -1)
   {
     perror("Failed to close file");
   }
+}
+
+void removeTreasure(char *huntID, int treasureID)
+{
+  char huntPath[PATHS_LEN];
+  char filePath[PATHS_LEN];
+  char tempPath[PATHS_LEN]; // we create a temporary file for writing, because deleting a treasure from the middle of the file is not possible.
+  int retvalr, retvalw;     // we just rewrite the file , but without the treasure we want to delete.
+  int k = 0;
+
+  if (snprintf(huntPath, sizeof(huntPath), "./%s", huntID) >= sizeof(huntPath))
+  {
+    perror("huntPath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(filePath, sizeof(filePath), "%s/treasure.dat", huntPath) >= sizeof(filePath))
+  {
+    perror("filePath buffer error(too small)");
+    return;
+  }
+
+  if (snprintf(tempPath, sizeof(tempPath), "%s/treasure.tmp", huntPath) >= sizeof(tempPath))
+  {
+    perror("tempPath buffer error(too small)");
+    return;
+  }
+
+  retvalr = open(filePath, O_RDONLY);
+  if (retvalr < 0)
+  {
+    perror("Failed to open original treasure file");
+    if (close(retvalr) == -1)
+    {
+      perror("Failed to close file");
+    }
+    return;
+  }
+
+  retvalw = open(tempPath, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+  if (retvalw < 0)
+  {
+    perror("Failed to create temporary file");
+    if (close(retvalw) == -1)
+    {
+      perror("Failed to close file");
+    }
+    return;
+  }
+
+  Treasure t;
+
+  while (read(retvalr, &t, sizeof(Treasure)) == sizeof(Treasure))
+  {
+    if (t.ID == treasureID)
+    {
+      k = 1;
+      continue;
+    }
+    if (write(retvalw, &t, sizeof(Treasure)) != sizeof(Treasure))
+    {
+      perror("Failed to write to temporary file");
+      if (close(retvalr) == -1)
+      {
+        perror("Failed to close file");
+      }
+      if (close(retvalw) == -1)
+      {
+        perror("Failed to close file");
+      }
+      return;
+    }
+  }
+
+  if (close(retvalr) == -1)
+  {
+    perror("Failed to close file");
+  }
+  if (close(retvalw) == -1)
+  {
+    perror("Failed to close file");
+  }
+
+  if (k == 0)
+  {
+    printf("Could not find the treasure with the ID %d in hunt '%s'.\n", treasureID, huntID);
+    unlink(tempPath);
+    return;
+  }
+
+  if (unlink(filePath) == -1)
+  {
+    perror("Failed to delete original treasure file");
+    return;
+  }
+
+  if (rename(tempPath, filePath) == -1)
+  {
+    perror("Failed to rename the temp file");
+    return;
+  }
+
+  printf("Treasure with ID %d has been removed from hunt '%s'.\n", treasureID, huntID);
 }
 
 void removeHunt(char *huntID)
@@ -419,8 +522,9 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-    // removeTreasure(argv[2], argv[3]);
-    //  addLog("REMOVE-TREASURE", argv[2], argv[3]);
+    int treasureID = atoi(argv[3]);
+    removeTreasure(argv[2], treasureID);
+    addLog("REMOVE-TREASURE", argv[2], treasureID);
   }
   else if (strcmp(argv[1], "--remove_hunt") == 0)
   {
