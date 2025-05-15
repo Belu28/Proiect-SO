@@ -334,10 +334,6 @@ void removeTreasure(char *huntID, int treasureID)
   if (retvalr < 0)
   {
     perror("Failed to open original treasure file");
-    if (close(retvalr) == -1)
-    {
-      perror("Failed to close file");
-    }
     return;
   }
 
@@ -490,6 +486,7 @@ int main(int argc, char *argv[])
 
     addTreasure(treasure, argv[2]);
     addLog("ADD", argv[2], treasure->ID);
+    free(treasure);
   }
   else if (strcmp(argv[1], "--list") == 0)
   {
