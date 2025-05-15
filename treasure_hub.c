@@ -26,6 +26,7 @@ void start_monitor()
     }
     else if (mpid == 0)
     {
+        execl("./monitor", "./monitor", NULL);
         perror("Failed to exec monitor");
         exit(1);
     }
@@ -34,6 +35,30 @@ void start_monitor()
         mrun = 1;
         printf("Monitor with PID %d\n has started", mpid);
     }
+}
+
+void send_command(const char *command)
+{
+    if (!mrun)
+    {
+        printf("The monitor is not running. It has to be started first\n");
+        return;
+    }
+
+    int retval = open("monitorcommands.txt", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+    if (retval < 0)
+    {
+        perror("Failed to open command file");
+        return;
+    }
+    write(retval, command, strlen(command));
+    if (close(retval) == -1)
+    {
+        perror("Failed to close file");
+        return;
+    }
+
+    kill(mpid, SIGUSR1);
 }
 
 void stop_monitor()
@@ -72,6 +97,18 @@ int main()
         if (strcmp(command, "start_monitor") == 0)
         {
             start_monitor();
+        }
+        else if (strncmp(input, "list_hunts", 10) == 0)
+        {
+            send_command("list_hunts");
+        }
+        else if (strncmp(input, "list_treasures", 14) == 0) // we only verify the first word (in this case list_treasures) to be the same, and if so, we then send all input, including the name of a hunt
+        {
+            send_command(input);
+        }
+        else if (strncmp(input, "view_treasure", 13) == 0)
+        {
+            send_command(input);
         }
         else if (strcmp(command, "stop_monitor") == 0)
         {
