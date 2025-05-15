@@ -83,7 +83,7 @@ int main()
 {
     struct sigaction semnal;
     semnal.sa_handler = handler;
-    sigemptyset(&semnal.sa_mask); // initializam masca ca goala
+    sigemptyset(&semnal.sa_mask); // We initialize the mask to empty
     semnal.sa_flags = 0;
     sigaction(SIGCHLD, &semnal, NULL);
 
