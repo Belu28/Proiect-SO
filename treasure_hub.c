@@ -33,7 +33,7 @@ void start_monitor()
     else
     {
         mrun = 1;
-        printf("Monitor with PID %d\n has started", mpid);
+        printf("Monitor with PID %d has started\n", mpid);
     }
 }
 
@@ -59,6 +59,7 @@ void send_command(const char *command)
     }
 
     kill(mpid, SIGUSR1);
+    sleep(1);
 }
 
 void stop_monitor()
@@ -92,23 +93,23 @@ int main()
     {
         printf("Hub : ");
         fgets(command, sizeof(command), stdin);
-        input[strcspn(command, "\n")] = 0;
+        command[strcspn(command, "\n")] = 0;
 
         if (strcmp(command, "start_monitor") == 0)
         {
             start_monitor();
         }
-        else if (strncmp(input, "list_hunts", 10) == 0)
+        else if (strncmp(command, "list_hunts", 10) == 0)
         {
             send_command("list_hunts");
         }
-        else if (strncmp(input, "list_treasures", 14) == 0) // we only verify the first word (in this case list_treasures) to be the same, and if so, we then send all input, including the name of a hunt
+        else if (strncmp(command, "list_treasures", 14) == 0) // we only verify the first word (in this case list_treasures) to be the same, and if so, we then send all input, including the name of a hunt
         {
-            send_command(input);
+            send_command(command);
         }
-        else if (strncmp(input, "view_treasure", 13) == 0)
+        else if (strncmp(command, "view_treasure", 13) == 0)
         {
-            send_command(input);
+            send_command(command);
         }
         else if (strcmp(command, "stop_monitor") == 0)
         {

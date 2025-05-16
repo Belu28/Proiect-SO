@@ -13,6 +13,60 @@ void handler(int sig)
         perror("Failed to open command file");
         return;
     }
+
+    char command[256] = {0};
+
+    ssize_t nrb = read(retval, command, sizeof(command) - 1);
+    if (nrb < 0)
+    {
+        perror("Failed to read command");
+        if (close(retval) == -1)
+        {
+            perror("Failed to close file");
+        }
+        return;
+    }
+
+    command[nrb] = '\0';
+
+    if (close(retval) == -1)
+    {
+        perror("Failed to close file");
+        return;
+    }
+
+    if (strncmp(command, "list_hunts", 10) == 0)
+    {
+        printf("List of hunts:\n");
+        system("ls -d Hunt*"); // We print only the directories that start with Hunt
+    }
+    else if (strncmp(command, "list_treasures", 14) == 0)
+    {
+        char huntName[100];
+        sscanf(command, "list_treasures %s", huntName);
+        char treasurecmd[200];
+        snprintf(treasurecmd, sizeof(treasurecmd), "./treasure_manager --list %s", huntName);
+        system(treasurecmd);
+    }
+    else if (strncmp(command, "view_treasure", 13) == 0)
+    {
+        char huntName[100];
+        int id;
+        sscanf(command, "view_treasure %s %d", huntName, &id);
+        char treasurecmd[200];
+        snprintf(treasurecmd, sizeof(treasurecmd), "./treasure_manager --view %s %d", huntName, id);
+        system(treasurecmd);
+    }
+    else if (strncmp(command, "stop_monitor", 12) == 0)
+    {
+        printf("Stopping monitor..\n");
+        sleep(1);
+        exit(0);
+    }
+    else
+    {
+        printf("Unknown command : - %s\n Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-stop_monitor\n-exit\n", command);
+    }
 }
 
 int main()
@@ -23,5 +77,11 @@ int main()
     semnal.sa_flags = 0;
     sigaction(SIGUSR1, &semnal, NULL);
 
+    printf("The Monitor is ready and waiting for commands.\n");
+
+    while (1)
+    {
+        pause();
+    }
     return 0;
 }
