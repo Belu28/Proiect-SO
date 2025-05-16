@@ -59,7 +59,7 @@ void send_command(const char *command)
     }
 
     kill(mpid, SIGUSR1);
-    sleep(1);
+    sleep(5);
 }
 
 void stop_monitor()

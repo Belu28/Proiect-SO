@@ -44,18 +44,44 @@ void handler(int sig)
     {
         char huntName[100];
         sscanf(command, "list_treasures %s", huntName);
-        char treasurecmd[200];
-        snprintf(treasurecmd, sizeof(treasurecmd), "./treasure_manager --list %s", huntName);
-        system(treasurecmd);
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            execl("./treasure_manager", "treasure_manager", "--list", huntName, NULL);
+            perror("execl failed");
+            exit(1);
+        }
+        else if (pid > 0)
+        {
+            wait(NULL);
+        }
+        else
+        {
+            perror("fork failed");
+        }
     }
     else if (strncmp(command, "view_treasure", 13) == 0)
     {
         char huntName[100];
-        int id;
-        sscanf(command, "view_treasure %s %d", huntName, &id);
-        char treasurecmd[200];
-        snprintf(treasurecmd, sizeof(treasurecmd), "./treasure_manager --view %s %d", huntName, id);
-        system(treasurecmd);
+        int trsid;
+        sscanf(command, "view_treasure %s %d", huntName, &trsid);
+        char treasureID[12];
+        snprintf(treasureID, sizeof(treasureID), "%d", trsid);
+        pid_t pid = fork();
+        if (pid == 0)
+        {
+            execl("./treasure_manager", "treasure_manager", "--view", huntName, treasureID, NULL);
+            perror("execl failed");
+            exit(1);
+        }
+        else if (pid > 0)
+        {
+            wait(NULL);
+        }
+        else
+        {
+            perror("fork failed");
+        }
     }
     else if (strncmp(command, "stop_monitor", 12) == 0)
     {
