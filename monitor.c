@@ -4,6 +4,20 @@
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <sys/wait.h>
+
+#define USERNAME_LEN 50
+#define CLUE_LEN 150
+typedef struct Treasure
+{
+    int ID;
+    char username[USERNAME_LEN];
+    float latitude;
+    float longitude;
+    char clue[CLUE_LEN];
+    int value;
+} Treasure;
 
 void handler(int sig)
 {
@@ -38,7 +52,46 @@ void handler(int sig)
     if (strncmp(command, "list_hunts", 10) == 0)
     {
         printf("List of hunts:\n");
-        system("ls -d Hunt*"); // We print only the directories that start with Hunt
+        char *path = "."; // We put the path as the current directory, because the hunts are in the here
+        DIR *dir = opendir(path);
+        if (!dir)
+        {
+            perror("Failed to open hunts directory");
+            return;
+        }
+
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) // We skip the current and parent directory so we only get the hunts.
+                continue;
+
+            char treasure_path[512];
+            snprintf(treasure_path, sizeof(treasure_path), "%s/%s/treasure.dat", path, entry->d_name);
+
+            int retval = open(treasure_path, O_RDONLY);
+            if (retval == -1)
+            {
+                continue;
+            }
+
+            int count = 0;
+            Treasure t;
+            ssize_t bytes;
+            while ((bytes = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
+            {
+                count++;
+            }
+
+            if (close(retval) == -1)
+            {
+                perror("Failed to close file");
+            }
+
+            printf("Hunt: %s - Total Treasures: %d\n", entry->d_name, count);
+        }
+
+        closedir(dir);
     }
     else if (strncmp(command, "list_treasures", 14) == 0)
     {

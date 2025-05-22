@@ -515,7 +515,7 @@ int main(int argc, char *argv[])
   {
     if (argc != 4)
     {
-      perror("You should enter a hunt name and also the name of a specific trasure you want to remove\n");
+      perror("You should enter a hunt name and also the name of a specific treasure you want to remove\n");
       exit(1);
     }
 
