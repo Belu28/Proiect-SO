@@ -34,6 +34,11 @@ void handler(int sig)
         return;
     }
 
+    if (close(pfd[0]) == -1)
+    {
+        perror("Failed to close read end of pipe");
+    }
+
     command[nrb] = '\0';
 
     if (strncmp(command, "list_hunts", 10) == 0)
@@ -199,5 +204,11 @@ int main()
     {
         pause();
     }
+
+    if (close(pfd[1]) == -1)
+    {
+        perror("Failed to close read end of pipe");
+    }
+
     return 0;
 }

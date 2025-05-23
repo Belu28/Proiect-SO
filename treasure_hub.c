@@ -37,8 +37,6 @@ void start_monitor()
     }
     else if (mpid == 0)
     {
-        close(pfd[0]);
-        dup2(pfd[1], 1); // We redirect stdout to the pipe
         execl("./monitor", "./monitor", NULL);
         perror("Failed to exec monitor");
         exit(1);
@@ -54,11 +52,6 @@ void read_from_pipe()
 {
     char buffer[512];
 
-    if (close(pfd[1]) == -1)
-    {
-        perror("Failed to close pipe");
-    }
-
     int bytes;
     while ((bytes = read(pfd[0], buffer, sizeof(buffer) - 1)) > 0)
     {
@@ -71,9 +64,9 @@ void read_from_pipe()
         perror("Failed to read from pipe");
     }
 
-    if (close(pfd[0]) == -1)
+    if (close(pfd[0]) == -1) // We close the read end of the pipe after reading
     {
-        perror("Failed to close pipe");
+        perror("Failed to close read end of pipe");
     }
 }
 
@@ -93,6 +86,7 @@ void send_command(const char *command)
 
     kill(mpid, SIGUSR1);
     sleep(2);
+
     read_from_pipe();
 }
 
@@ -104,6 +98,14 @@ void stop_monitor()
         return;
     }
     send_command("stop_monitor");
+
+    if (close(pfd[1]) == -1) // We close the write end of the pipe when stopping the monitor
+
+    {
+        perror("Failed to close write end of pipe");
+    }
+
+    mrun = 0;
 }
 
 void handler(int sig)
@@ -112,6 +114,33 @@ void handler(int sig)
     waitpid(mpid, &status, 0);
     printf("Monitor exit with status %d\n", WEXITSTATUS(status));
     mrun = 0;
+}
+
+void read_from_pipe_calculate()
+{
+    char buffer[512];
+
+    if (close(pfd2[1]) == -1)
+    {
+        perror("Failed to close pipe");
+    }
+
+    int k;
+    while ((k = read(pfd2[0], buffer, sizeof(buffer) - 1)) > 0)
+    {
+        buffer[k] = '\0';
+        printf("Scores: %s", buffer);
+    }
+
+    if (k == -1)
+    {
+        perror("Error reading from pipe for calculate_score");
+    }
+
+    if (close(pfd2[0]) == -1)
+    {
+        perror("Failed to close pipe");
+    }
 }
 
 void calculate_score(char *HuntID)
@@ -169,33 +198,7 @@ void handler_calculate()
     {
         perror("Failed to close directory");
     }
-}
-
-void read_from_pipe_calculate()
-{
-    char buffer[512];
-
-    if (close(pfd2[1]) == -1)
-    {
-        perror("Failed to close pipe");
-    }
-
-    int k;
-    while ((k = read(pfd2[0], buffer, sizeof(buffer) - 1)) > 0)
-    {
-        buffer[k] = '\0';
-        printf("Scores: %s", buffer);
-    }
-
-    if (k == -1)
-    {
-        perror("Error reading from pipe for calculate_score");
-    }
-
-    if (close(pfd2[0]) == -1)
-    {
-        perror("Failed to close pipe");
-    }
+    read_from_pipe_calculate();
 }
 
 int main()
