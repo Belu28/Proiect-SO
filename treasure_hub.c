@@ -9,12 +9,19 @@
 
 pid_t mpid = -1;
 int mrun = 0;
+int pfd[2];
 
 void start_monitor()
 {
     if (mrun)
     {
         printf("The monitor is already running\n");
+        return;
+    }
+
+    if (pipe(pfd) == -1)
+    {
+        perror("Failed to create pipe");
         return;
     }
 
@@ -26,6 +33,8 @@ void start_monitor()
     }
     else if (mpid == 0)
     {
+        close(pfd[0]);
+        dup2(pfd[1], 1); // We redirect stdout to the pipe
         execl("./monitor", "./monitor", NULL);
         perror("Failed to exec monitor");
         exit(1);
@@ -34,6 +43,28 @@ void start_monitor()
     {
         mrun = 1;
         printf("Monitor with PID %d has started\n", mpid);
+    }
+}
+
+void read_from_pipe()
+{
+    char buffer[512];
+    close(pfd[1]);
+    int bytes;
+    while ((bytes = read(pfd[0], buffer, sizeof(buffer) - 1)) > 0)
+    {
+        buffer[bytes] = '\0';
+        printf("%s", buffer);
+    }
+
+    if (bytes == -1)
+    {
+        perror("Failed to read from pipe");
+    }
+
+    if (close(pfd[0]) == -1)
+    {
+        perror("Failed to close pipe");
     }
 }
 
@@ -60,6 +91,7 @@ void send_command(const char *command)
 
     kill(mpid, SIGUSR1);
     sleep(5);
+    read_from_pipe();
 }
 
 void stop_monitor()
@@ -78,6 +110,57 @@ void handler(int sig)
     waitpid(mpid, &status, 0);
     printf("Monitor exit with status %d\n", WEXITSTATUS(status));
     mrun = 0;
+}
+
+void calculate_score(char *HuntID)
+{
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        char huntPath[PATHS_LEN];
+        if (snprintf(HuntPath, sizeof(HuntPath), "./%s", HuntID) >= sizeof(HuntPath))
+        {
+            perror("HuntPath buffer error(too small)\n");
+            exit(1);
+        }
+        execl("./calculate_score", "calculate_score", HuntID, NULL);
+        perror("Failed to execute calculate_score");
+        exit(1);
+    }
+    else if (pid > 0)
+    {
+        wait(NULL);
+    }
+    else
+    {
+        perror("Fork failed");
+        return;
+    }
+}
+
+void handler_calculate(int sig)
+{
+    DIR *dir = opendir(".");
+    if (!dir)
+    {
+        perror("Failed to open directory");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        {
+            continue;
+        }
+        calculate_score(entry->d_name);
+    }
+
+    if (closedir(dir) == -1)
+    {
+        perror("Failed to close directory");
+    }
 }
 
 int main()
@@ -115,6 +198,10 @@ int main()
         {
             stop_monitor();
         }
+        else if (strncmp(command, "calculate_score", 15) == 0)
+        {
+            handler_calculate();
+        }
         else if (strcmp(command, "exit") == 0)
         {
             if (mrun)
@@ -129,7 +216,7 @@ int main()
         }
         else
         {
-            printf("Unknown command - Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-stop_monitor\n-exit\n");
+            printf("Unknown command - Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-stop_monitor\ncalculate_score\n-exit\n");
         }
     }
 

@@ -9,6 +9,9 @@
 
 #define USERNAME_LEN 50
 #define CLUE_LEN 150
+#define PATHS_LEN 530
+
+int pfd[2];
 typedef struct Treasure
 {
     int ID;
@@ -64,8 +67,9 @@ void handler(int sig)
         while ((entry = readdir(dir)) != NULL)
         {
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) // We skip the current and parent directory so we only get the hunts.
+            {
                 continue;
-
+            }
             char treasure_path[512];
             snprintf(treasure_path, sizeof(treasure_path), "%s/%s/treasure.dat", path, entry->d_name);
 
@@ -77,6 +81,7 @@ void handler(int sig)
 
             int count = 0;
             Treasure t;
+
             ssize_t bytes;
             while ((bytes = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
             {
@@ -88,29 +93,45 @@ void handler(int sig)
                 perror("Failed to close file");
             }
 
-            printf("Hunt: %s - Total Treasures: %d\n", entry->d_name, count);
+            char result[512];
+            snprintf(result, sizeof(result), "Hunt: %s - Total Treasures: %d\n", entry->d_name, count);
+            write(pipefd[1], result, strlen(result));
         }
 
-        closedir(dir);
+        if (closedir(dir) == -1)
+        {
+            perror("Failed to close directory");
+        }
     }
     else if (strncmp(command, "list_treasures", 14) == 0)
     {
         char huntName[100];
         sscanf(command, "list_treasures %s", huntName);
-        pid_t pid = fork();
-        if (pid == 0)
+
+        char treasurePath[PATHS_LEN] ș if (snprintf(treasurePath, sizeof(treasurePath), "./%s/treasure.dat", huntName))
         {
-            execl("./treasure_manager", "treasure_manager", "--list", huntName, NULL);
-            perror("execl failed");
-            exit(1);
+            perror("treasurePath buffer error(too small)");
+            return;
         }
-        else if (pid > 0)
+        int retval = open(treasurePath, O_RDONLY);
+        if (retval < 0)
         {
-            wait(NULL);
+            perror("Failed to open treasure file");
+            return;
         }
-        else
+
+        Treasure t;
+        int k;
+        while ((k = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
         {
-            perror("fork failed");
+            char result[512];
+            snprintf(result, sizeof(result), "Treasure ID: %d\nUsername: %s\nLatitude: %.2f\nLongitude: %.2f\nClue: %s\nValue: %d\n", t.ID, t.username, t.latitude, t.longitude, t.clue, t.value);
+            write(pipefd[1], result, strlen(result));
+        }
+
+        if (close(retval) == -1)
+        {
+            perror("Failed to close file");
         }
     }
     else if (strncmp(command, "view_treasure", 13) == 0)
@@ -118,22 +139,47 @@ void handler(int sig)
         char huntName[100];
         int trsid;
         sscanf(command, "view_treasure %s %d", huntName, &trsid);
-        char treasureID[12];
-        snprintf(treasureID, sizeof(treasureID), "%d", trsid);
-        pid_t pid = fork();
-        if (pid == 0)
+
+        char treasurePath[PATHS_LEN];
+        if (snprintf(treasurePath, sizeof(treasurePath), "./%s/treasure.dat", huntName) >= sizeof(treasurePath))
         {
-            execl("./treasure_manager", "treasure_manager", "--view", huntName, treasureID, NULL);
-            perror("execl failed");
-            exit(1);
+            perror("treasurePath buffer error(too small)");
+            return;
         }
-        else if (pid > 0)
+
+        int retval = open(treasurePath, O_RDONLY);
+        if (retval < 0)
         {
-            wait(NULL);
+            perror("Failed to open treasure file");
+            return;
         }
-        else
+
+        Treasure t;
+        int k = 0;
+        int ok = 0;
+
+        while ((k = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
         {
-            perror("fork failed");
+            if (t.ID == trsid)
+            {
+                char result[512];
+                snprintf(result, sizeof(result), "Treasure ID: %d\nUsername: %s\nLatitude: %.2f\nLongitude: %.2f\nClue: %s\nValue: %d\n", t.ID, t.username, t.latitude, t.longitude, t.clue, t.value);
+                write(pipefd[1], result, strlen(result));
+                ok = 1;
+                break;
+            }
+        }
+
+        if (ok == 0)
+        {
+            char result[512];
+            snprintf(result, sizeof(result), "Treasure with ID %d not found in hunt '%s'.\n", trsid, huntName);
+            write(pipefd[1], result, strlen(result));
+        }
+
+        if (close(retval) == -1)
+        {
+            perror("Failed to close file");
         }
     }
     else if (strncmp(command, "stop_monitor", 12) == 0)
@@ -150,6 +196,12 @@ void handler(int sig)
 
 int main()
 {
+    if (pipe(pfd) == -1)
+    {
+        perror("Failed to create pipe");
+        return 1;
+    }
+
     struct sigaction semnal;
     semnal.sa_handler = handler;
     sigemptyset(&semnal.sa_mask);
