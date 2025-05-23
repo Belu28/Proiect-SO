@@ -82,8 +82,8 @@ void handler(int sig)
             int count = 0;
             Treasure t;
 
-            ssize_t bytes;
-            while ((bytes = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
+            int k;
+            while ((k = read(retval, &t, sizeof(Treasure))) == sizeof(Treasure))
             {
                 count++;
             }
