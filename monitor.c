@@ -24,33 +24,17 @@ typedef struct Treasure
 
 void handler(int sig)
 {
-    int retval = open("monitorcommands.txt", O_RDONLY);
-    if (retval < 0)
-    {
-        perror("Failed to open command file");
-        return;
-    }
-
     char command[256] = {0};
 
-    ssize_t nrb = read(retval, command, sizeof(command) - 1);
+    ssize_t nrb = read(pfd[0], command, sizeof(command) - 1);
+
     if (nrb < 0)
     {
-        perror("Failed to read command");
-        if (close(retval) == -1)
-        {
-            perror("Failed to close file");
-        }
+        perror("Failed to read command from pipe");
         return;
     }
 
     command[nrb] = '\0';
-
-    if (close(retval) == -1)
-    {
-        perror("Failed to close file");
-        return;
-    }
 
     if (strncmp(command, "list_hunts", 10) == 0)
     {
@@ -95,7 +79,7 @@ void handler(int sig)
 
             char result[512];
             snprintf(result, sizeof(result), "Hunt: %s - Total Treasures: %d\n", entry->d_name, count);
-            write(pipefd[1], result, strlen(result));
+            write(pfd[1], result, strlen(result));
         }
 
         if (closedir(dir) == -1)
@@ -108,7 +92,8 @@ void handler(int sig)
         char huntName[100];
         sscanf(command, "list_treasures %s", huntName);
 
-        char treasurePath[PATHS_LEN] ș if (snprintf(treasurePath, sizeof(treasurePath), "./%s/treasure.dat", huntName))
+        char treasurePath[PATHS_LEN];
+        if (snprintf(treasurePath, sizeof(treasurePath), "./%s/treasure.dat", huntName))
         {
             perror("treasurePath buffer error(too small)");
             return;
@@ -126,7 +111,7 @@ void handler(int sig)
         {
             char result[512];
             snprintf(result, sizeof(result), "Treasure ID: %d\nUsername: %s\nLatitude: %.2f\nLongitude: %.2f\nClue: %s\nValue: %d\n", t.ID, t.username, t.latitude, t.longitude, t.clue, t.value);
-            write(pipefd[1], result, strlen(result));
+            write(pfd[1], result, strlen(result));
         }
 
         if (close(retval) == -1)
@@ -164,7 +149,7 @@ void handler(int sig)
             {
                 char result[512];
                 snprintf(result, sizeof(result), "Treasure ID: %d\nUsername: %s\nLatitude: %.2f\nLongitude: %.2f\nClue: %s\nValue: %d\n", t.ID, t.username, t.latitude, t.longitude, t.clue, t.value);
-                write(pipefd[1], result, strlen(result));
+                write(pfd[1], result, strlen(result));
                 ok = 1;
                 break;
             }
@@ -174,7 +159,7 @@ void handler(int sig)
         {
             char result[512];
             snprintf(result, sizeof(result), "Treasure with ID %d not found in hunt '%s'.\n", trsid, huntName);
-            write(pipefd[1], result, strlen(result));
+            write(pfd[1], result, strlen(result));
         }
 
         if (close(retval) == -1)
@@ -190,7 +175,7 @@ void handler(int sig)
     }
     else
     {
-        printf("Unknown command : - %s\n Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-stop_monitor\n-exit\n", command);
+        printf("Unknown command : - %s\n Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-calculate_score\n-stop_monitor\n-exit\n", command);
     }
 }
 

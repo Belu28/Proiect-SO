@@ -6,10 +6,14 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <dirent.h>
+
+#define PATHS_LEN 530
 
 pid_t mpid = -1;
 int mrun = 0;
 int pfd[2];
+int pfd2[2];
 
 void start_monitor()
 {
@@ -49,7 +53,12 @@ void start_monitor()
 void read_from_pipe()
 {
     char buffer[512];
-    close(pfd[1]);
+
+    if (close(pfd[1]) == -1)
+    {
+        perror("Failed to close pipe");
+    }
+
     int bytes;
     while ((bytes = read(pfd[0], buffer, sizeof(buffer) - 1)) > 0)
     {
@@ -76,21 +85,14 @@ void send_command(const char *command)
         return;
     }
 
-    int retval = open("monitorcommands.txt", O_WRONLY | O_CREAT | O_TRUNC, 0777);
-    if (retval < 0)
+    if (write(pfd[1], command, strlen(command)) == -1)
     {
-        perror("Failed to open command file");
-        return;
-    }
-    write(retval, command, strlen(command));
-    if (close(retval) == -1)
-    {
-        perror("Failed to close file");
+        perror("Failed to write command to pipe");
         return;
     }
 
     kill(mpid, SIGUSR1);
-    sleep(5);
+    sleep(2);
     read_from_pipe();
 }
 
@@ -118,11 +120,17 @@ void calculate_score(char *HuntID)
     if (pid == 0)
     {
         char huntPath[PATHS_LEN];
-        if (snprintf(HuntPath, sizeof(HuntPath), "./%s", HuntID) >= sizeof(HuntPath))
+        if (snprintf(huntPath, sizeof(huntPath), "./%s", HuntID) >= sizeof(huntPath))
         {
             perror("HuntPath buffer error(too small)\n");
             exit(1);
         }
+
+        if (close(pfd2[0]) == -1)
+        {
+            perror("Failed to close pipe");
+        }
+        dup2(pfd2[1], 1);
         execl("./calculate_score", "calculate_score", HuntID, NULL);
         perror("Failed to execute calculate_score");
         exit(1);
@@ -138,7 +146,7 @@ void calculate_score(char *HuntID)
     }
 }
 
-void handler_calculate(int sig)
+void handler_calculate()
 {
     DIR *dir = opendir(".");
     if (!dir)
@@ -160,6 +168,33 @@ void handler_calculate(int sig)
     if (closedir(dir) == -1)
     {
         perror("Failed to close directory");
+    }
+}
+
+void read_from_pipe_calculate()
+{
+    char buffer[512];
+
+    if (close(pfd2[1]) == -1)
+    {
+        perror("Failed to close pipe");
+    }
+
+    int k;
+    while ((k = read(pfd2[0], buffer, sizeof(buffer) - 1)) > 0)
+    {
+        buffer[k] = '\0';
+        printf("Scores: %s", buffer);
+    }
+
+    if (k == -1)
+    {
+        perror("Error reading from pipe for calculate_score");
+    }
+
+    if (close(pfd2[0]) == -1)
+    {
+        perror("Failed to close pipe");
     }
 }
 
@@ -216,7 +251,7 @@ int main()
         }
         else
         {
-            printf("Unknown command - Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-stop_monitor\ncalculate_score\n-exit\n");
+            printf("Unknown command - Try the following commands : \n-start_monitor\n-list_hunts\n-list_treasures\n-view_treasure\n-calculate_score\n-stop_monitor\n-exit\n");
         }
     }
 
